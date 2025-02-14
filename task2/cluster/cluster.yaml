@@ -1,8 +1,11 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-networking:
-  apiServerAddress: "192.168.1.100"  # Replace with allowed IP
-  apiServerPort: 6443
 nodes:
-- role: control-plane
-- role: worker
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 80    # Port the Ingress controller listens on inside the container
+        hostPort: 30080      # Port on your host you want to use
+        protocol: TCP
+      - containerPort: 443   # (Optional) For HTTPS traffic
+        hostPort: 30443
+        protocol: TCP
