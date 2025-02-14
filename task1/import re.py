@@ -20,6 +20,6 @@ def process_file(filename):
             parity = 'even' if int(user_id) % 2 == 0 else 'odd'
             print(f"The ID {user_id} of {email} is {parity} number.")
 
-process_file("/Users/abdelaatyh2/Documents/technical/users.txt")
+process_file("users.txt")
 
 
