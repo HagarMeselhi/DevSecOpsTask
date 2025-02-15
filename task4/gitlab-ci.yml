@@ -1,0 +1,85 @@
+image: python:3.8
+
+stages:
+  - build
+  - test
+  - scan
+  - deploy
+  - docker_build
+
+# 1. Build the application
+build_app:
+  stage: build
+  before_script:
+    - python -m pip install --upgrade pip==20.2.4 setuptools==44.1.1 wheel==0.34.2
+  script:
+    - pip install -r requirements.txt
+    - mkdir build
+    - echo "Hello from the build step" > build/placeholder.txt
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 hour
+
+# 2. Run unit tests
+test_app:
+  stage: test
+  script:
+    - pip install -r requirements.txt
+    - python manage.py test core --settings=demo.settings
+
+# 3. Scan the application code for vulnerabilities (Bandit)
+scan_app:
+  stage: scan
+  image: python:3.8
+  script:
+    - pip install bandit
+    - bandit -r . || true
+    - exit 0
+
+# 4. Deploy to a staging server
+deploy_app:
+  stage: deploy
+  tags:
+    - macos
+  before_script:
+    - brew install sshpass
+  script:
+    - sshpass -p "password" scp -P 2222 -r build/ root@localhost:/root/deployed_app
+
+# 5. Build & push Docker image to Docker Hub using Kaniko
+kaniko_build:
+  stage: docker_build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: ["/busybox/sh","-c"]  # so we can run shell commands
+  variables:
+    DOCKER_CONFIG: /kaniko/.docker/
+  script:
+    # 1. Make the Docker config folder
+    - mkdir -p /kaniko/.docker
+
+    # 2. Write Docker Hub credentials (using registry-1.docker.io)
+    - |
+      cat > /kaniko/.docker/config.json <<EOF
+      {
+        "auths": {
+          "registry-1.docker.io": {
+            "username": "$YOUR_DOCKER_USERNAME",
+            "password": "$YOUR_TOKEN"
+          }
+        }
+      }
+      EOF
+
+    # 3. Use Kaniko to build & push to "registry-1.docker.io/hagarmeselhi/myapp"
+    - |
+      /kaniko/executor \
+        --context $CI_PROJECT_DIR \
+        --dockerfile $CI_PROJECT_DIR/Dockerfile \
+        --destination "registry-1.docker.io/hagarmeselhi/myapp:$CI_COMMIT_SHA" \
+        --destination "registry-1.docker.io/hagarmeselhi/myapp:latest" \
+        --cleanup
+
+  only:
+    - master
